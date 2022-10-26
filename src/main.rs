@@ -2,7 +2,6 @@ mod config;
 mod handler;
 mod schemas;
 
-//add
 use actix_web::{
     guard,
     web::{self, Data},
@@ -14,7 +13,9 @@ use async_graphql::{
 };
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 use config::mongo::DBMongo;
+use dotenv::dotenv;
 use handler::graphql_handler::{Mutation, ProjectSchema, Query};
+use std::env;
 
 //graphql entry
 async fn index(schema: Data<ProjectSchema>, req: GraphQLRequest) -> GraphQLResponse {
@@ -29,12 +30,22 @@ async fn graphql_playground() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
+    let current_env = match env::var("ENV") {
+        Ok(v) => v.to_string(),
+        Err(_) => "DEV".to_string(),
+    };
+    let mut address = "127.0.0.1";
+    if current_env == "PROD" {
+        address = "0.0.0.0";
+    }
     //connect to the data source
     let db = DBMongo::init().await;
     let schema_data = Schema::build(Query, Mutation, EmptySubscription)
         .data(db)
         .finish();
     println!("Running in - http://localhost:8080");
+    println!("Running in - {}:8080", address);
     HttpServer::new(move || {
         App::new()
             .app_data(Data::new(schema_data.clone()))
@@ -45,7 +56,7 @@ async fn main() -> std::io::Result<()> {
                     .to(graphql_playground),
             )
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((address, 8080))?
     .run()
     .await
 }
